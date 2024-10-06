@@ -40,26 +40,11 @@ def report_correlation_metrics(pred_score, true_score):
     spearmanr_res = spearmanr(pred_score, true_score)
     return pearsonr_res, spearmanr_res
 
-
-pairwise_data_sql = r"""
-select arrayStringConcat(arrayFilter(x->length(x) > 0, extractAll(lowerUTF8(concat(paper_title1, ' ', abstract1)), '\\w+')),
-                         ' ')                                            as content1,
-       arrayStringConcat(arrayFilter(x->length(x) > 0, extractAll(lowerUTF8(concat(paper_title2, ' ', abstract2)), '\\w+')),
-                         ' ')                                            as content2,
-       same_author                                                       as score,
-       (xxHash32(fullname) % 100 as rand) < 50 ? 1 : (rand < 75 ? 0 : 2) as train1_test0_val2
-from and_ds_pm2022.our_and_dataset_pairwise_gold_standard
--- Note downsampling the majority class
-where length(content1) > 20 and length(content2) > 20
-and
-same_author = 1 ? xxHash32(concat(fullname, 'xxxx')) % 100 < 15 : 1;"""
-
 # Note ######################################################################################
 # Note fine-tuning phase
 
 # >>>>> Note Step 1. load dataset <<<<<<
-df = DBReader.tcp_model_cached_read('XXXXX', sql=pairwise_data_sql, cached=False)
-# df = pd.read_csv(os.path.join(cached_dir, 'lagos_and_pairwise_pubmed_sampled_data_for_training_sbert.tsv'), sep='\t')
+df = pd.read_csv(os.path.join(cached_dir, 'lagos_and_pairwise_pubmed_sampled_data_for_training_sbert.tsv'), sep='\t')
 df['content1'] = df['content1'].astype(str)
 df['content2'] = df['content2'].astype(str)
 print(df.head())
@@ -108,18 +93,10 @@ for idx, model_name_or_path in enumerate(models_in_use):
 # # Note inferring phase
 # # Note load the dataset from a DATABASE
 #
-# data_sql_template = r"""select pm_id,
-#        concat(clean_article_title, ' ', clean_abstract) as content
-# from pubmed.nft_paper_20220101_parsed_fields
-# where xxHash32(pm_id) %% 10 = %d;"""
+# df = pd.read_csv('nft_paper_20220101_parsed_fields.tsv')
 #
-# for seg in range(10):
-#     sql = data_sql_template % seg
-#     print(sql)
-#     df = DBReader.tcp_model_cached_read('XXX', sql=sql, cached=False)
-#
-#     res = processor.infer(content_list=df['content'].values)
-#     del df['content']
-#     df['embedding'] = [','.join([str(m) for m in emb[1].astype(np.float16)]) for emb in res]
-#     df.to_csv(os.path.join(cached_dir, 'pubmed-paper-bert-embedding-len%d.tsv' % embedding_len), sep='\t', index=False,
-#               header=False, mode='a')
+# res = processor.infer(content_list=df['content'].values)
+# del df['content']
+# df['embedding'] = [','.join([str(m) for m in emb[1].astype(np.float16)]) for emb in res]
+# df.to_csv(os.path.join(cached_dir, 'pubmed-paper-bert-embedding-len%d.tsv' % embedding_len), sep='\t', index=False,
+#           header=False, mode='a')

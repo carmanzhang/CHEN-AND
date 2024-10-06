@@ -8,12 +8,8 @@ import os
 import numpy as np
 
 from myconfig import cached_dir
-
-df = DBReader.tcp_model_cached_read('XXXX', sql=r"""
-select new_pid, content, desc, is_in_our_labelled_dataset
-from and_ds_ench.sinomed_pubmed_citation_textual_content
-where desc in ('sinomed-en', 'sinomed-zh');
-""", cached=False)
+import pandas as pd
+df = pd.read_csv('sinomed_pubmed_citation_textual_content.csv')
 
 df_sinomed_en = df[df['desc'] == 'sinomed-en']
 df_sinomed_zh = df[(df['desc'] == 'sinomed-zh') & (df['is_in_our_labelled_dataset'] == 1)]

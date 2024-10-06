@@ -10,23 +10,11 @@ from tqdm import tqdm
 
 from eutilities.metric import calc_metrics, metric_names
 from eutilities.resultsaver import save_result
-
 from eutilities.string_utils import jaccard_similarity, intersection
 
-sql_pairwise = r'''
-select xmol_clean_author_name, new_pid1, new_pid2, xmol_aid1, xmol_raw_citation1,
-    coauthors1, author_affiliations1, author_provinces1, author_cities1, author_postcodes1,
-    en_infersent_embedding1, en_sent2vec_embedding1, en_specter_embedding1, zh_medbert_embedding1,
-    title1, journal_title1, pub_year1, xmol_aid2, xmol_raw_citation2,
-    coauthors2, author_affiliations2, author_provinces2, author_cities2, author_postcodes2,
-    en_infersent_embedding2, en_sent2vec_embedding2, en_specter_embedding2, zh_medbert_embedding2,
-    title2, journal_title2, pub_year2, train1_test0_val2
-from and_ds_ench.CHENAND_sub_CH_dataset_sampled_author_pair where train1_test0_val2 = 0
-;
-'''
-df_test = DBReader.tcp_model_cached_read(cached_file_path='xxx', sql=sql_pairwise, cached=False)
+import pandas as pd
+df_test = pd.read_csv('CHENAND_sub_CHEN_dataset_sampled_author_pair.csv')
 print('df_test.shape: ', df_test.shape)
-
 
 def cosine_similarity(v1, v2):
     if v1 is None or len(v1) == 0 or v2 is None or len(v2) == 0 or len(v1) != len(v2):
@@ -43,44 +31,44 @@ def cosine_similarity(v1, v2):
 
 feature_and_metadata = []
 for i, row in tqdm(df_test.iterrows(), total=len(df_test)):
-    xmol_clean_author_name, new_pid1, new_pid2, xmol_aid1, xmol_raw_citation1, \
-    coauthors1, author_affiliations1, author_provinces1, author_cities1, author_postcodes1, \
-    en_infersent_embedding1, en_sent2vec_embedding1, en_specter_embedding1, zh_medbert_embedding1, \
-    title1, journal_title1, pub_year1, xmol_aid2, xmol_raw_citation2, \
-    coauthors2, author_affiliations2, author_provinces2, author_cities2, author_postcodes2, \
-    en_infersent_embedding2, en_sent2vec_embedding2, en_specter_embedding2, zh_medbert_embedding2, \
-    title2, journal_title2, pub_year2, train1_test0_val2 = row
+    xmol_clean_author_name, xmol_author_pinyin_name, pid1, ao1, pid2, ao2, source1, source2, \
+        xmol_aid1, coauthors1, organizations1, country1, provinces1, cities1, postcodes1, en_specter_embedding1, title1, journal_title1, pub_year1, \
+        xmol_aid2, coauthors2, organizations2, country2, provinces2, cities2, postcodes2, en_specter_embedding2, title2, journal_title2, pub_year2, \
+        train1_test0_val2 = row
 
     # metadata: xmol_clean_author_name, pid1, pid2, xmol_aid1, xmol_aid2, train1_test0_val2
     same_author = 1 if xmol_aid1 == xmol_aid2 else 0
 
     sim_coauthors_intersection = intersection(coauthors1, coauthors2)
-    sim_affiliations_intersection = intersection(author_affiliations1, author_affiliations2)
-    sim_provinces_intersection = intersection(author_provinces1, author_provinces2)
-    sim_cities_intersection = intersection(author_cities1, author_cities2)
-    sim_postcode_intersection = intersection(author_postcodes1, author_postcodes2)
-    sim_embd_infsent = cosine_similarity(en_infersent_embedding1, en_infersent_embedding2)
-    sim_embd_sent2vec = cosine_similarity(en_sent2vec_embedding1, en_sent2vec_embedding2)
+    sim_affiliations_intersection = intersection(organizations1, organizations2)
+    sim_country_intersection = intersection(country1, country2)
+    sim_provinces_intersection = intersection(provinces1, provinces2)
+    sim_cities_intersection = intersection(cities1, cities2)
+    sim_postcode_intersection = intersection(postcodes1, postcodes2)
+    sim_embd_infsent = -1
+    sim_embd_sent2vec = -1
     sim_embd_specter = cosine_similarity(en_specter_embedding1, en_specter_embedding2)
-    sim_embd_medbert = cosine_similarity(zh_medbert_embedding1, zh_medbert_embedding2)
-    sim_title_jaccard = jaccard_similarity(title1.split(' '), title2.split(' '))
-    sim_journal_jaccard = jaccard_similarity(journal_title1.split(' '), journal_title2.split(' '))
+    # sim_embd_medbert = cosine_similarity(zh_medbert_embedding1, zh_medbert_embedding2)
+    sim_embd_medbert = -1
+    sim_title_jaccard = jaccard_similarity([n for n in title1.split(' ') if len(n) > 2], [n for n in title2.split(' ') if len(n) > 2])
+    sim_journal_jaccard = jaccard_similarity([n for n in journal_title1.split(' ') if len(n) > 2], [n for n in journal_title2.split(' ') if len(n) > 2])
     sim_pubyear_diff = 40 - abs(int(pub_year1) - int(pub_year2)) if 40 - abs(int(pub_year1) - int(pub_year2)) > 0 else 0
 
     feature_and_metadata.append(
-        [xmol_clean_author_name, new_pid1, new_pid2, same_author, train1_test0_val2,  # [0-4]
+        [xmol_clean_author_name, pid1, pid2, same_author, train1_test0_val2,  # [0-4]
          sim_coauthors_intersection,  # 0
          sim_affiliations_intersection,  # 1
-         sim_provinces_intersection,  # 2
-         sim_cities_intersection,  # 3
-         sim_postcode_intersection,  # 4
-         sim_embd_infsent,  # 5
-         sim_embd_sent2vec,  # 6
-         sim_embd_specter,  # 7
-         sim_embd_medbert,  # 8
-         sim_title_jaccard,  # 9
-         sim_journal_jaccard,  # 10
-         sim_pubyear_diff  # 11
+         sim_country_intersection,  # 2
+         sim_provinces_intersection,  # 3
+         sim_cities_intersection,  # 4
+         sim_postcode_intersection,  # 5
+         sim_embd_infsent,  # 6
+         sim_embd_sent2vec,  # 7
+         sim_embd_specter,  # 8
+         sim_embd_medbert,  # 9
+         sim_title_jaccard,  # 10
+         sim_journal_jaccard,  # 11
+         sim_pubyear_diff  # 12
          ]
     )
 
@@ -89,58 +77,14 @@ for i, row in tqdm(df_test.iterrows(), total=len(df_test)):
 #                                     'coauthors', 'affiliations', 'provinces', 'cities', 'postcodes',
 #                                     'infsent', 'sen2vec', 'specter', 'medbert', 'titlsim',
 #                                     'journal', 'pubyear'])
+
 df_pairwise = pd.DataFrame(feature_and_metadata,
                            columns=['FN', 'pid1', 'pid2', 'same_author', 'train1_test0_val2',
-                                    'CA', 'AF', 'PV', 'CT', 'PC',
+                                    'CA', 'AF', 'NT', 'PV', 'CT', 'PC',
                                     'InferSent', 'Sent2Vec', 'SPECTER', 'MedBERT', 'TitleSim',
                                     'JT', 'PY'])
 
-sql_block = r'''
-select xmol_aid,
-             xmol_clean_author_name,
-             pid_ao,
-             new_pid,
-             xmol_raw_citation,
-             coauthors,
-             author_affiliations,
-             author_provinces,
-             author_cities,
-             author_postcodes,
-             en_infersent_embedding,
-             en_sent2vec_embedding,
-             en_specter_embedding,
-             zh_medbert_embedding,
-             title,
-             journal_title,
-             pub_year,
-             train1_test0_val2
-      from (
-               select xmol_aid,
-                      xmol_clean_author_name,
-                      concat(toString(new_pid), '_', toString(author_position)) as pid_ao,
-                      new_pid,
-                      xmol_raw_citation,
-                      coauthors,
-
-                      author_affiliations,
-                      author_provinces,
-                      author_cities,
-                      author_postcodes,
-                      en_infersent_embedding,
-                      en_sent2vec_embedding,
-                      en_specter_embedding,
-                      zh_medbert_embedding,
-                      title,
-                      journal_title,
-                      pub_year,
-                      train1_test0_val2
-               from and_ds_ench.CH_EN_AND_dataset
--- Note denoting Chinese AND dataset
-               where CHAND > 0)
-;
-'''
-
-df = DBReader.tcp_model_cached_read(cached_file_path='xxx', sql=sql_block, cached=False)
+df = pd.read_csv('CH_EN_AND_dataset_block.csv')
 
 df_train, df_val, df_test = df[df['train1_test0_val2'] == 1], df[df['train1_test0_val2'] == 2], df[df['train1_test0_val2'] == 0]
 print('df_train, df_val, df_test: ', df_train.shape, df_val.shape, df_test.shape)
@@ -195,9 +139,9 @@ def data_precision_round(arr, precision=2, pctg=True):
 num_author_names_in_testset = len(df_test)
 eval_methods = ['FN', 'CA', 'AF', 'PV', 'CT', 'PC',
                 # 'JT',
-                # 'PV-CT-PC',
-                'AF-PV-CT-PC',
-                'CA-AF-PV-CT-PC']
+                'NT-PV-CT-PC',
+                'AF-NT-PV-CT-PC',
+                'CA-AF-NT-PV-CT-PC']
 
 for eval_method in eval_methods:
     all_metrics = []
@@ -231,48 +175,39 @@ for eval_method in eval_methods:
             predictions = predictions_basedon_coauthor
         elif eval_method == 'AF':
             predictions_basedon_normalizedaff = make_heuristic_based_author_group_judgement(
-                sub_df[['author_affiliations']].apply(flatten_to_1d_list, axis=1).values)
+                sub_df[['organizations']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_normalizedaff
         elif eval_method == 'PV':
             predictions_basedon_province = make_heuristic_based_author_group_judgement(
-                sub_df[['author_provinces']].apply(flatten_to_1d_list, axis=1).values)
+                sub_df[['provinces']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_province
         elif eval_method == 'CT':
             predictions_basedon_city = make_heuristic_based_author_group_judgement(
-                sub_df[['author_cities']].apply(flatten_to_1d_list, axis=1).values)
+                sub_df[['cities']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_city
         elif eval_method == 'PC':
             predictions_basedon_postcode = make_heuristic_based_author_group_judgement(
-                sub_df[['author_postcodes']].apply(flatten_to_1d_list, axis=1).values)
+                sub_df[['postcodes']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_postcode
         elif eval_method == 'JT':
             predictions_basedon_journal = make_heuristic_based_author_group_judgement(
                 sub_df[['journal_title']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_journal
-        elif eval_method == 'PV-CT-PC':
+        elif eval_method == 'NT-PV-CT-PC':
             predictions_basedon_provincecitypostcode = make_heuristic_based_author_group_judgement(
-                sub_df[['author_provinces', 'author_cities', 'author_postcodes']].apply(flatten_to_1d_list, axis=1).values)
+                sub_df[['countries', 'provinces', 'cities', 'postcodes']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_provincecitypostcode
-        elif eval_method == 'AF-PV-CT-PC':
+        elif eval_method == 'AF-NT-PV-CT-PC':
             predictions_basedon_normalizedaff_provincecitypostcode = make_heuristic_based_author_group_judgement(
-                sub_df[['author_affiliations', 'author_provinces', 'author_cities', 'author_postcodes']].apply(flatten_to_1d_list,
-                                                                                                               axis=1).values)
+                sub_df[['organizations', 'countries', 'provinces', 'cities', 'postcodes']].apply(flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_normalizedaff_provincecitypostcode
-        elif eval_method == 'CA-AF-PV-CT-PC':
+        elif eval_method == 'CA-AF-NT-PV-CT-PC':
             predictions_basedon_all_metadata = make_heuristic_based_author_group_judgement(
-                sub_df[['coauthors', 'author_affiliations',
-                        'author_provinces', 'author_cities',
-                        'author_postcodes']].apply(
+                sub_df[['coauthors', 'organizations',
+                        'countries', 'provinces', 'cities',
+                        'postcodes']].apply(
                     flatten_to_1d_list, axis=1).values)
             predictions = predictions_basedon_all_metadata
-
-        # for i, row in sub_df.iterrows():
-        #     xmol_aid, xmol_clean_author_name, pid, xmol_raw_citation, coauthors, \
-        #     author_affiliations, author_provinces, author_cities, author_postcodes, \
-        #     en_infersent_embedding, en_sent2vec_embedding, en_specter_embedding, zh_medbert_embedding, \
-        #     title, journal_title, pub_year, train1_test0_val2 = row
-        #
-        #     print(block_xmol_name)
 
         # Note #############################################################################################
         # Note test the performance of MAG author identifier
@@ -285,6 +220,7 @@ for eval_method in eval_methods:
     # note calculate the P R F1 metrics on PAIRWISE metrics
     ground_truths = df_pairwise['same_author'].values
     selected_columns = eval_method.split('-')
+
     predictions = df_pairwise[selected_columns].apply(lambda x: len([n for n in x if n != 0]) > 0, axis=1).values
     # Note eval the model
     pairwise_metrics = calc_metrics(ground_truths, predictions)
@@ -301,10 +237,9 @@ for eval_method in eval_methods:
 
     # print(mean_metrics)
     print('\t'.join(metric_names + columns))
-    metric_str = '\t'.join(
-        ['heuristics-' + eval_method, str(num_pairwise_instances) + '_' + str(num_block_instances)]
-        + [str(round(n * 100, 2)) for n in pairwise_metrics + block_metrics])
+    metric_str = '\t'.join(['heuristics-' + eval_method, str(num_pairwise_instances) + '_' + str(num_block_instances)]
+                           + [str(round(n * 100, 2)) for n in pairwise_metrics + block_metrics])
     print('num_author_names_in_testset: %d; method: %s; means metrics: %s'
           % (num_author_names_in_testset, eval_method, metric_str))
 
-    save_result(spec='CHAND-Offline.txt', metrics=metric_str)
+    save_result(spec='CHENAND-V2-Offline.txt', metrics=metric_str)
